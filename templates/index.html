@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Device Control Panel</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #e0e7ff, #f3e8ff);
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      color: #1e3a8a;
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin: 0 auto;
+    }
+    .control-section, .sensor-section {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: transform 0.2s;
+    }
+    .control-section:hover, .sensor-section:hover {
+      transform: translateY(-5px);
+    }
+    .control-section h2, .sensor-section h2 {
+      margin: 0 0 15px;
+      color: #1e3a8a;
+      font-size: 1.8em;
+    }
+    .device-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background-color 0.3s, transform 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    button.on {
+      background-color: #22c55e;
+      color: white;
+    }
+    button.off {
+      background-color: #ef4444;
+      color: white;
+    }
+    button:hover {
+      transform: scale(1.05);
+      opacity: 0.95;
+    }
+    .status {
+      font-size: 0.9em;
+      color: #4b5563;
+      margin-left: 10px;
+    }
+    .status.on { color: #22c55e; }
+    .status.off { color: #ef4444; }
+    .sensor-section table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 12px;
+      text-align: center;
+      font-size: 1em;
+    }
+    th {
+      background-color: #1e3a8a;
+      color: white;
+    }
+    td {
+      background-color: #f9fafb;
+    }
+    .refresh-btn {
+      background-color: #3b82f6;
+      padding: 10px 20px;
+      margin-top: 10px;
+      width: 100%;
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      border-radius: 5px;
+      color: white;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+    }
+    .toast.success { background-color: #22c55e; }
+    .toast.error { background-color: #ef4444; }
+    .toast.show { opacity: 1; }
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+      button {
+        padding: 10px 16px;
+        font-size: 0.9em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Smart Device Control Panel</h1>
+  <div class="container">
+    <div class="control-section">
+      <h2>Fan</h2>
+      <div class="device-controls">
+        <button id="fan-btn" class="off" onclick="toggleDevice('fan')"><i class="fas fa-fan"></i> Fan: OFF</button>
+        <span class="status off" id="fan-status">Status: OFF</span>
+      </div>
+    </div>
+
+    <div class="control-section">
+      <h2>LED Light</h2>
+      <div class="device-controls">
+        <button id="light-btn" class="off" onclick="toggleDevice('light')"><i class="fas fa-lightbulb"></i> Light: OFF</button>
+        <span class="status off" id="light-status">Status: OFF</span>
+      </div>
+    </div>
+
+    <div class="control-section">
+      <h2>Servo</h2>
+      <div class="device-controls">
+        <button id="servo-btn" class="off" onclick="toggleDevice('servo')"><i class="fas fa-cog"></i> Servo: OFF</button>
+        <span class="status off" id="servo-status">Status: OFF</span>
+      </div>
+    </div>
+
+    <div class="sensor-section">
+      <h2>Environment</h2>
+      <table>
+        <tr>
+          <th>Sensor</th>
+          <th>Value</th>
+        </tr>
+        <tr>
+          <td>Temperature</td>
+          <td id="temperature">-- °C</td>
+        </tr>
+        <tr>
+          <td>Humidity</td>
+          <td id="humidity">-- %</td>
+        </tr>
+        <tr>
+          <td>Sound Level</td>
+          <td id="sound">-- dB</td>
+        </tr>
+        <tr>
+          <td>Light Intensity</td>
+          <td id="light_intensity">-- lux</td>
+        </tr>
+      </table>
+      <button class="refresh-btn" onclick="fetchSensorData()"><i class="fas fa-sync-alt"></i> Refresh Data</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+  <script>
+    // MQTT Client Setup
+    const clientId = 'WebClient_' + Math.random().toString(16).slice(3);
+    const client = new Paho.MQTT.Client('plumehoof431.cloud.shiftr.io', 443, '/mqtt', clientId);
+
+    // MQTT message handler
+    client.onMessageArrived = function(message) {
+      const topic = message.destinationName;
+      const payload = message.payloadString;
+      console.log(`MQTT Message: ${topic} = ${payload}`);
+      if (topic === 'fan' || topic === 'light' || topic === 'servo_state') {
+        const device = topic === 'servo_state' ? 'servo' : topic;
+        const btn = document.getElementById(`${device}-btn`);
+        const statusElement = document.getElementById(`${device}-status`);
+        const state = payload.toUpperCase();
+        if (btn && statusElement) {
+          btn.classList.remove('on', 'off');
+          statusElement.classList.remove('on', 'off');
+          btn.classList.add(state === 'ON' ? 'on' : 'off');
+          statusElement.classList.add(state === 'ON' ? 'on' : 'off');
+          btn.innerHTML = `<i class="fas ${device === 'fan' ? 'fa-fan' : device === 'light' ? 'fa-lightbulb' : 'fa-cog'}"></i> ${device.charAt(0).toUpperCase() + device.slice(1)}: ${state}`;
+          statusElement.textContent = `Status: ${state}`;
+        }
+      } else if (topic === 'temperature' || topic === 'humidity' || topic === 'sound' || topic === 'light_intensity') {
+        try {
+          const value = parseFloat(payload);
+          if (isNaN(value)) throw new Error(`Invalid ${topic} value: ${payload}`);
+          const unit = topic === 'temperature' ? '°C' : topic === 'humidity' ? '%' : topic === 'sound' ? 'dB' : 'lux';
+          document.getElementById(topic).textContent = `${value.toFixed(2)} ${unit}`;
+        } catch (e) {
+          console.error(`Error processing ${topic}:`, e);
+          showToast(`Invalid ${topic} data: ${payload}`, 'error');
+        }
+      }
+    };
+
+    client.connect({
+      userName: 'plumehoof431',
+      password: 'XzfNh17Rfd8zxqTY',
+      useSSL: true,
+      onSuccess: () => {
+        console.log('Connected to MQTT broker');
+        client.subscribe('fan');
+        client.subscribe('light');
+        client.subscribe('servo_state');
+        client.subscribe('temperature');
+        client.subscribe('humidity');
+        client.subscribe('sound');
+        client.subscribe('light_intensity');
+      },
+      onFailure: (err) => {
+        console.error('MQTT connection failed:', err);
+        showToast('Failed to connect to MQTT broker', 'error');
+      }
+    });
+
+    // Toggle device state
+    function toggleDevice(device) {
+      const btn = document.getElementById(`${device}-btn`);
+      const currentState = btn.classList.contains('on') ? 'on' : 'off';
+      const newState = currentState === 'on' ? 'off' : 'on';
+      fetch(`/device/${device}/${newState}`, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            btn.classList.remove('on', 'off');
+            btn.classList.add(newState);
+            const statusElement = document.getElementById(`${device}-status`);
+            statusElement.classList.remove('on', 'off');
+            statusElement.classList.add(newState);
+            btn.innerHTML = `<i class="fas ${device === 'fan' ? 'fa-fan' : device === 'light' ? 'fa-lightbulb' : 'fa-cog'}"></i> ${device.charAt(0).toUpperCase() + device.slice(1)}: ${newState.toUpperCase()}`;
+            statusElement.textContent = `Status: ${newState.toUpperCase()}`;
+            showToast(`Set ${device} to ${newState}`, 'success');
+          } else {
+            showToast(`Error: ${data.message}`, 'error');
+          }
+        })
+        .catch(error => {
+          console.error('Error controlling device:', error);
+          showToast('Error controlling device', 'error');
+        });
+    }
+
+    // Fetch sensor data
+    function fetchSensorData() {
+      fetch('/sensors')
+        .then(response => response.json())
+        .then(data => {
+          console.log('Fetched sensor data:', data);
+          const temp = data.temperature !== '--' ? parseFloat(data.temperature) : null;
+          const hum = data.humidity !== '--' ? parseFloat(data.humidity) : null;
+          const sound = data.sound !== '--' ? parseFloat(data.sound) : null;
+          const light = data.light_intensity !== '--' ? parseFloat(data.light_intensity) : null;
+          document.getElementById('temperature').textContent = temp !== null ? `${temp.toFixed(2)} °C` : '-- °C';
+          document.getElementById('humidity').textContent = hum !== null ? `${hum.toFixed(2)} %` : '-- %';
+          document.getElementById('sound').textContent = sound !== null ? `${sound.toFixed(2)} dB` : '-- dB';
+          document.getElementById('light_intensity').textContent = light !== null ? `${light.toFixed(2)} lux` : '-- lux';
+        })
+        .catch(error => {
+          console.error('Error fetching sensor data:', error);
+          showToast('Failed to fetch sensor data', 'error');
+        });
+    }
+
+    // Show toast notification
+    function showToast(message, type) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} show`;
+      setTimeout(() => {
+        toast.className = 'toast';
+      }, 3000);
+    }
+
+    // Initial fetch and periodic updates
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchSensorData(); // Initial fetch
+    });
+    setInterval(fetchSensorData, 5000);
+  </script>
+</body>
+</html>
