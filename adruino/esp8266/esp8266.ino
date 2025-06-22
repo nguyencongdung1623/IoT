@@ -15,7 +15,7 @@ const int mqtt_port = 1883;
 const char* mqtt_user = "silentprince839";
 const char* mqtt_pass = "pOSBE5CfXH1Oaz6z";
 const char* mqtt_client_id = "ESP8266Client";
-//deptrai
+
 // GPIO
 const int buttonPins[] = {D1, D2, D0}; // Fan button, LED button, Servo button
 const int fanPin = D5;                 // Fan output
